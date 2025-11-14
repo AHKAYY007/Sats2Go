@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     )
 
     DATABASE_URL: str
+    DATABASE_URL_DEV: str
     API_PREFIX: str
     DEBUG: bool = False
     ALLOWED_ORIGINS: str ="http://localhost:3000,http://localhost:5173"

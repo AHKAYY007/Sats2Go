@@ -2,7 +2,7 @@ from fastapi import APIRouter, status, Depends
 from app.handlers.voucher import create_voucher, redeem_voucher, get_voucher_by_code
 from core.session import get_session
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.voucher import VoucherCreate
+from app.models.voucher import VoucherCreate, VoucherRedeem
 
 
 router = APIRouter(
@@ -22,10 +22,10 @@ async def create_new_voucher(req: VoucherCreate, db: AsyncSession = Depends(get_
     }
 
 @router.post("/redeem")
-async def redeem_vouchers(code: str, wallet: str, db: AsyncSession = Depends(get_session)):
+async def redeem_vouchers(req: VoucherRedeem, db: AsyncSession = Depends(get_session)):
     """Endpoint to redeem a voucher code."""
 
-    voucher = await redeem_voucher(code, wallet, db)
+    voucher = await redeem_voucher(req, db)
     return voucher
 
 

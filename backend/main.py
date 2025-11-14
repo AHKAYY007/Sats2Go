@@ -3,7 +3,6 @@ from fastapi import FastAPI
 from core.config import settings
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from app.routers import voucher
 from core.session import init_db
@@ -50,7 +49,7 @@ app.add_middleware(
 )
 
 # ---- ROUTES ---- #
-app.include_router(voucher.router)
+app.include_router(voucher.router, prefix=settings.API_PREFIX)
 
 
 # ---- HEALTHCHECK & ROOT ENDPOINTS ---- #

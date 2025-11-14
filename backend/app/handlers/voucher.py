@@ -1,6 +1,6 @@
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.voucher import Voucher, VoucherCreate
+from app.models.voucher import Voucher, VoucherCreate, VoucherRedeem
 from app.models.status import VoucherStatus
 import qrcode
 import io
@@ -45,7 +45,7 @@ async def create_voucher(req: VoucherCreate, db: AsyncSession) -> Voucher:
 
     new_voucher = Voucher(
         amount=req.amount,
-        expires_at=datetime.utcnow() + timedelta(days=7)
+        expires_at=datetime.utcnow() + timedelta(minutes=3)
     )
     db.add(new_voucher)
     await db.commit()
@@ -57,10 +57,10 @@ async def create_voucher(req: VoucherCreate, db: AsyncSession) -> Voucher:
 
 
 
-async def redeem_voucher(code: str, wallet: str, db: AsyncSession) -> dict:
+async def redeem_voucher(req: VoucherRedeem, db: AsyncSession) -> dict:
     """Handler to redeem a voucher code."""
 
-    result = await db.execute(select(Voucher).where(Voucher.code == code))
+    result = await db.execute(select(Voucher).where(Voucher.code == req.code))
     voucher = result.scalars().first()
 
     if not voucher:
@@ -76,6 +76,9 @@ async def redeem_voucher(code: str, wallet: str, db: AsyncSession) -> dict:
         )
     
     if voucher.expires_at and voucher.expires_at < datetime.utcnow():
+        voucher.status = VoucherStatus.EXPIRED
+        await db.commit()
+        
         raise HTTPException(
             status_code=400, 
             detail="Voucher has expired."
@@ -93,7 +96,7 @@ async def redeem_voucher(code: str, wallet: str, db: AsyncSession) -> dict:
 
     # Redeem the voucher
     voucher.status = VoucherStatus.REDEEMED
-    voucher.user_wallet = wallet
+    voucher.user_wallet = req.user_wallet
     voucher.redeemed_at = datetime.utcnow()
 
     db.add(voucher)
@@ -104,7 +107,7 @@ async def redeem_voucher(code: str, wallet: str, db: AsyncSession) -> dict:
     # Example: settle invoice, notify user, or log redemption
 
     return {
-        "message": f"{voucher.amount} $sats sent to {wallet}."
+        "message": f"{voucher.amount} $sats sent to {req.user_wallet}."
     }
     
 
