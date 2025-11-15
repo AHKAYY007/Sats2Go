@@ -14,7 +14,8 @@ export default function HowItWorks() {
 
           <div className="grid md:grid-cols-3 gap-8">
             {steps.map((step) => (
-              <div key={step.number} className="p-8 text-center border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+              <div key={step.number} className="p-8 text-center border border-gray-200 
+              rounded-lg shadow-sm hover:shadow-md transition-shadow">
                 <div className="text-5xl font-bold text-orange-500/30 mb-6">{step.number}</div>
                 <h3 className="text-2xl font-bold text-gray-900 mb-4">{step.title}</h3>
                 <p className="text-gray-600 leading-relaxed">{step.description}</p>
