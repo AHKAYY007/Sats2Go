@@ -75,7 +75,6 @@ export const VoucherDisplay = ({ vouchers }: IProps) => {
                 {voucher.voucher.code}
               </p>
             </div>
-
             <div className="space-y-2">
               <button
                 onClick={() => setShowQRCodeIndex(index)}
