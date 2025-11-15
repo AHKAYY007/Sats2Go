@@ -4,12 +4,17 @@ from app.models.voucher import Voucher, VoucherCreate, VoucherRedeem
 from app.models.status import VoucherStatus
 import qrcode
 import io
+from app.lightning.lnbits import create_lnurl_withdraw, LNBitsError
 import base64
 from PIL import Image
 from sqlmodel import select
 from datetime import datetime, timedelta
+from core.config import settings
+from typing import List
 
-# Helper to generate QR code for a voucher
+webhook_url="http://localhost:8000/webhooks/lnbits"
+
+
 def generate_QR(data: str) -> str:
     qr = qrcode.QRCode(
         version=1,
@@ -20,11 +25,8 @@ def generate_QR(data: str) -> str:
     qr.add_data(data)
     qr.make(fit=True)
 
-    # Use Pillow to make image
     img: Image.Image = qr.make_image(fill_color="black", back_color="white")
-    img.show()
 
-    # Save to bytes buffer
     buffered = io.BytesIO()
     img.save(buffered, format="PNG")
     qr_base64 = base64.b64encode(buffered.getvalue()).decode()
@@ -32,16 +34,20 @@ def generate_QR(data: str) -> str:
     return f"data:image/png;base64,{qr_base64}"
 
 
-# --- Handlers --- #
-async def create_voucher(req: VoucherCreate, db: AsyncSession) -> Voucher:
-    """Handler to create a new voucher."""
-    
+async def get_all_vouchers(db: AsyncSession) -> List[Voucher]:
+    statement = select(Voucher)
+    result = await db.execute(statement)
+    return result.scalars().all()
+
+
+async def create_voucher(req: VoucherCreate, db: AsyncSession):
+    """Create a voucher WITHOUT LNURL. LNURL is only created on redemption."""
+
     if req.amount <= 0:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=400,
             detail="Voucher amount must be greater than zero.",
         )
-
 
     new_voucher = Voucher(
         amount=req.amount,
@@ -51,77 +57,71 @@ async def create_voucher(req: VoucherCreate, db: AsyncSession) -> Voucher:
     await db.commit()
     await db.refresh(new_voucher)
 
-    # Generate QR code for the voucher
-    code = generate_QR(new_voucher.code)
-    return new_voucher, code
+    qr_code = generate_QR(new_voucher.code)
 
+    return new_voucher, qr_code
 
 
 async def redeem_voucher(req: VoucherRedeem, db: AsyncSession) -> dict:
-    """Handler to redeem a voucher code."""
-
     result = await db.execute(select(Voucher).where(Voucher.code == req.code))
     voucher = result.scalars().first()
 
     if not voucher:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Voucher not found.",
-        )
-    
+        raise HTTPException(404, "Voucher not found.")
+
     if voucher.status != VoucherStatus.ACTIVE:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Voucher has already been redeemed."
-        )
-    
+        raise HTTPException(400, f"Voucher already {voucher.status}.")
+
     if voucher.expires_at and voucher.expires_at < datetime.utcnow():
         voucher.status = VoucherStatus.EXPIRED
         await db.commit()
-        
-        raise HTTPException(
-            status_code=400, 
-            detail="Voucher has expired."
-        )
+        raise HTTPException(400, "Voucher has expired.")
 
-
-    # TODO: Implement Bitcoin Lightning payment check here
-    # Example: verify invoice/payment associated with this voucher
-    # lightning_payment_successful = await check_lightning_payment(voucher.code)
-    # if not lightning_payment_successful:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_402_PAYMENT_REQUIRED,
-    #         detail="Lightning payment not completed."
-    #     )
-
-    # Redeem the voucher
+    # mark as redeeming
     voucher.status = VoucherStatus.REDEEMED
-    voucher.user_wallet = req.user_wallet
-    voucher.redeemed_at = datetime.utcnow()
-
-    db.add(voucher)
     await db.commit()
     await db.refresh(voucher)
 
-    # TODO: Trigger any post-redemption logic for Lightning
-    # Example: settle invoice, notify user, or log redemption
+    try:
+        lnurl_obj = await create_lnurl_withdraw(
+            amount=voucher.amount,
+            memo=f"Sats2Go voucher {voucher.code}",
+            uses=1,
+            webhook_url=f"{webhook_url}/webhooks/lnbits"
+        )
 
-    return {
-        "message": f"{voucher.amount} $sats sent to {req.user_wallet}."
-    }
-    
+        k1 = lnurl_obj.get("k1")
+        if not k1:
+            raise LNBitsError("LNBits did not return k1")
+
+        voucher.user_wallet = k1
+        await db.commit()
+        await db.refresh(voucher)
+
+        lnurl_value = lnurl_obj.get("lnurl")
+
+        qr = generate_QR(lnurl_value)
+
+        return {
+            "voucher_code": voucher.code,
+            "status": "ready_to_claim",
+            "amount": voucher.amount,
+            "lnurl": lnurl_value,
+            "qr_base64": qr,
+            "message": "Scan with any Lightning LNURL-withdraw wallet to claim your sats."
+        }
+
+    except Exception as e:
+        voucher.status = VoucherStatus.ACTIVE
+        await db.commit()
+        raise HTTPException(500, f"Error creating LNURL: {e}")
 
 
 async def get_voucher_by_code(code: str, db: AsyncSession) -> Voucher:
-    """Handler to get a voucher by its code."""
-
     result = await db.execute(select(Voucher).where(Voucher.code == code))
     voucher = result.scalars().first()
 
     if not voucher:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Voucher not found.",
-        )
+        raise HTTPException(404, "Voucher not found.")
 
     return voucher
