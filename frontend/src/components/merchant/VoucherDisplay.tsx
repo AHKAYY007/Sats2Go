@@ -61,7 +61,7 @@ export const VoucherDisplay = ({ vouchers }: IProps) => {
   return (
     <div className="w-full">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
-        {vouchers.map((voucher, index) => (
+        {vouchers.slice(0, 5).map((voucher, index) => (
           <div key={voucher.voucher.code} className="bg-white border border-orange-200 rounded-lg p-6 shadow-lg w-full">
             <h3 className="text-center font-semibold mb-3">Voucher Created</h3>
 
