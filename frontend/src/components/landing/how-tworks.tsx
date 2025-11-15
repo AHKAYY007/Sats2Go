@@ -11,7 +11,6 @@ export default function HowItWorks() {
               Three simple steps to own Bitcoin sats
             </p>
           </div>
-
           <div className="grid md:grid-cols-3 gap-8">
             {steps.map((step) => (
               <div key={step.number} className="p-8 text-center border border-gray-200 
