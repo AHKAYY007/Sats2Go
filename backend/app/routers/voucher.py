@@ -3,7 +3,7 @@ from app.handlers.voucher import create_voucher, redeem_voucher, get_voucher_by_
 from core.session import get_session
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.voucher import VoucherCreate, VoucherRedeem, Voucher
-from typing import List
+from typing import List, Dict
 
 
 router = APIRouter(
@@ -43,7 +43,7 @@ async def get_voucher_info(code: str, db: AsyncSession = Depends(get_session)):
     return voucher
 
 
-@router.get('/', response_model=List[Voucher])
+@router.get('/', response_model=List[Dict])
 async def get_vouchers(db: AsyncSession = Depends(get_session)):
     """Endpoint to return all vouchers"""
 

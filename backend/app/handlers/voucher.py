@@ -10,7 +10,7 @@ from PIL import Image
 from sqlmodel import select
 from datetime import datetime, timedelta
 from core.config import settings
-from typing import List
+from typing import List, Dict
 
 webhook_url="http://localhost:8000/webhooks/lnbits"
 
@@ -34,10 +34,23 @@ def generate_QR(data: str) -> str:
     return f"data:image/png;base64,{qr_base64}"
 
 
-async def get_all_vouchers(db: AsyncSession) -> List[Voucher]:
+async def get_all_vouchers(db: AsyncSession) -> List[Dict]:
+    """
+    Fetch all vouchers and return them with QR codes.
+    """
     statement = select(Voucher)
     result = await db.execute(statement)
-    return result.scalars().all()
+    vouchers = result.scalars().all()
+
+    # Wrap each voucher with QR code
+    vouchers_with_qr = []
+    for v in vouchers:
+        vouchers_with_qr.append({
+            "voucher": v,
+            "qr_code": generate_QR(v.code)
+        })
+
+    return vouchers_with_qr
 
 
 async def create_voucher(req: VoucherCreate, db: AsyncSession):
